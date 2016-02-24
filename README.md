@@ -1,1 +1,1 @@
-weixin pay demo project..
+weixin pay demo project.
