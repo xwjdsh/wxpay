@@ -1,6 +1,7 @@
 package wxpay
 
 import (
+	"encoding/xml"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,15 +11,24 @@ import (
 
 type WxPay struct {
 	Config *WxConfig
-	Http   *httpHelper.HttpHelper
+	http   *httpHelper.HttpHelper
 }
 
 const (
 	NEW_ORDER_URL = "https://api.mch.weixin.qq.com/pay/unifiedorder"
 )
 
+func (this *WxPay) check() bool {
+	return this.Config != nil && this.http != nil && this.Config.checked
+}
+
 func (this *WxPay) NewOrder(param map[string]string) {
+	if !this.check() {
+		return
+	}
+	//prepare params
 	this.formatParam(param)
+	//send new order request
 	this.createOrder(param)
 }
 
@@ -47,13 +57,16 @@ func (this *WxPay) formatParam(params map[string]string) {
 	params["sign"] = strings.ToUpper(getMD5Hash(result))
 }
 
-func (this *WxPay) createOrder(params map[string]string) {
-	xml := mapToXmlString(params)
-	resp, err := this.Http.Send("POSTFORM", NEW_ORDER_URL, []byte(xml), nil)
+func (this *WxPay) createOrder(params map[string]string) (*NewOrderResp, error) {
+	xmlString := mapToXmlString(params)
+	resp, err := this.http.Send("POSTFORM", NEW_ORDER_URL, []byte(xmlString), nil)
 	if err != nil {
-		fmt.Println(resp)
-	} else {
-		fmt.Println("err:" + err.Error())
+		return nil, err
 	}
-
+	newOrderResp := NewOrderResp{}
+	err = xml.Unmarshal(resp, &newOrderResp)
+	if err != nil {
+		return nil, err
+	}
+	return &newOrderResp, nil
 }
