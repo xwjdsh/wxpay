@@ -23,7 +23,7 @@ func (this *WxConfig) NewWxPay() (*WxPay, error) {
 		return nil, errors.New("any config can't equals empty string")
 	}
 	this.checked = true
-	helper := &httpHelper.HttpHelper{CommonHeader: url.Values{}}
+	helper := &httpHelper.HttpHelper{CommonHeader: url.Values{}, Log: true}
 	return &WxPay{
 		Config: this,
 		http:   helper,

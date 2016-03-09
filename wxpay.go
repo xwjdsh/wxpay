@@ -2,9 +2,8 @@ package wxpay
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/xwjdsh/httphelper"
 )
@@ -22,47 +21,55 @@ func (this *WxPay) check() bool {
 	return this.Config != nil && this.http != nil && this.Config.checked
 }
 
-func (this *WxPay) NewOrder(param map[string]string) {
+func (this *WxPay) NewOrder(nonce_str, body, out_trade_no, total_fee, spbill_create_ip, trade_type string, param map[string]string) (*NewOrderResp, error) {
 	if !this.check() {
-		return
+		return nil, errors.New("wrong object!")
+	}
+	if err := checkNotEmpty(nonce_str, body, out_trade_no, total_fee, spbill_create_ip, trade_type); err != nil {
+		return nil, err
+	}
+	if param == nil {
+		param = make(map[string]string, 0)
 	}
 	//prepare params
-	this.formatParam(param)
+	this.formatParam(nonce_str, body, out_trade_no, total_fee, spbill_create_ip, trade_type, param)
 	//send new order request
-	this.createOrder(param)
+	return this.createOrder(param)
 }
 
-func (this *WxPay) formatParam(params map[string]string) {
-	if params == nil {
-		params = make(map[string]string, 0)
-	}
+func (this *WxPay) formatParam(nonce_str, body, out_trade_no, total_fee, spbill_create_ip, trade_type string, params map[string]string) {
+	params["nonce_str"] = nonce_str
+	params["body"] = body
+	params["out_trade_no"] = out_trade_no
+	params["total_fee"] = total_fee
+	params["spbill_create_ip"] = spbill_create_ip
+	params["trade_type"] = trade_type
+
 	params["appid"] = this.Config.AppId
 	params["mch_id"] = this.Config.MchId
 	params["notify_url"] = this.Config.NotifyUrl
-	params["trade_type"] = this.Config.TradeType
+	params["sign"] = GenerateSign(params, this.Config.AppKey)
+	fmt.Println("sign", params["sign"])
+}
 
-	keys := []string{}
-	for k, _ := range params {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var result string
-	for i, k := range keys {
-		if i == 1 {
-			result += fmt.Sprintf("%s=%s", k, params[k])
+func checkNotEmpty(checkParams ...string) error {
+	for _, param := range checkParams {
+		if param == "" {
+			return errors.New("必填参数存在空项!")
 		}
-		result += fmt.Sprintf("&%s=%s", k, params[k])
 	}
-	result += fmt.Sprintf("&%s=%s", "key", this.Config.AppKey)
-	params["sign"] = strings.ToUpper(getMD5Hash(result))
+	return nil
 }
 
 func (this *WxPay) createOrder(params map[string]string) (*NewOrderResp, error) {
+	fmt.Println(params)
 	xmlString := mapToXmlString(params)
+	fmt.Println(xmlString)
 	resp, err := this.http.Send("POSTFORM", NEW_ORDER_URL, []byte(xmlString), nil)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(string(resp[:]))
 	newOrderResp := NewOrderResp{}
 	err = xml.Unmarshal(resp, &newOrderResp)
 	if err != nil {
